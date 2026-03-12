@@ -1,3 +1,4 @@
+#ifdef RB_INC_MDC
 // Provides a C++11 implementation of a multi-producer, multi-consumer lock-free queue.
 // An overview, including benchmark results, is provided here:
 //     http://moodycamel.com/blog/2014/a-fast-general-purpose-lock-free-queue-for-c++
@@ -3746,7 +3747,9 @@ inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a, ty
 #pragma GCC diagnostic pop
 #endif
 
+#endif
 
+#ifdef RB_INC_NANOLOG
 // NANOLOG
 /*
 
@@ -4670,3 +4673,4 @@ namespace nanolog
 #endif
 
 #endif /* NANO_LOG_HEADER_GUARD */
+#endif

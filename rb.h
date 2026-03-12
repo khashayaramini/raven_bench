@@ -8,6 +8,10 @@
     X(uint8_t, message_type, INT) \
     X(uint8_t, flags, BITSET8)
 
+#define RB_INC_MDC
+#define RB_INC_NANOLOG
+#include "rb_deps.h"
+
 ////////////////////////////////
 ////////////////////////////////
 /////______///////_______///////
@@ -26,7 +30,6 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include "rb_deps.h"
 
 #define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
 #define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
