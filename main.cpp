@@ -2,6 +2,7 @@
 #include <thread>
 #define NANOLOG_IMPLEMENTATION
 #define RB_IMPLEMENTATION
+#define RB_ENABLE
 #include "rb.h"
 
 void my_thread_1()

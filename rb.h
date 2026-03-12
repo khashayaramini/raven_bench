@@ -31,8 +31,13 @@
 #include <iostream>
 #include <sstream>
 
+#ifdef RB_ENABLE
 #define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
 #define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
+#else
+#define rb_bench_c(...)
+#define rb_bench(...)
+#endif
 
 typedef struct rb_data_point
 {
