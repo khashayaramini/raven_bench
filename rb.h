@@ -37,9 +37,13 @@
 #ifdef RB_ENABLE
 #define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
 #define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
+#define rb_bench_dir_c(...) rb_bench_with_dp_dir((rb_data_point_t){__VA_ARGS__});
+#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{__VA_ARGS__});
 #else
 #define rb_bench_c(...)
 #define rb_bench(...)
+#define rb_bench_dir_c(...)
+#define rb_bench_dir(...)
 #endif
 
 typedef struct rb_data_point
@@ -54,6 +58,8 @@ extern moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
 
 void rb_init(std::string log_file_name);
 void rb_bench_with_dp(rb_data_point_t data_point);
+void rb_bench_with_dp_dir(rb_data_point_t data_point);
+void rb_write_log(rb_data_point_t data_point);
 void rb_log();
 void rb_log_block();
 
@@ -110,31 +116,42 @@ void rb_bench_with_dp(rb_data_point_t data_point)
     rb_logger_queue.enqueue(data_point);
 }
 
-void rb_log()
+void rb_bench_with_dp_dir(rb_data_point_t data_point)
 {
-    rb_data_point_t data_point;
-    while(rb_logger_queue.try_dequeue(data_point))
-    {
-        std::string timestamp_str;
-        rb_get_str_from_nanoseconds(data_point.timestamp, timestamp_str);
+    data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    rb_write_log(data_point);
+}
 
-        std::stringstream ss;
+void rb_write_log(rb_data_point_t data_point)
+{
+    std::string timestamp_str;
+    rb_get_str_from_nanoseconds(data_point.timestamp, timestamp_str);
 
-        ss << "RB_LOG"
-            << " | timestamp_str: " << timestamp_str
-            << " | timestamp: " << data_point.timestamp;
+    std::stringstream ss;
+
+    ss << "RB_LOG"
+        << " | timestamp_str: " << timestamp_str
+        << " | timestamp: " << data_point.timestamp;
 
 #define RB_PRINT_PLAIN(type, name) ss << " | " #name ": " << (data_point.name);
 #define RB_PRINT_INT(type, name) ss << " | " #name ": " << (int)(data_point.name);
 #define RB_PRINT_BITSET8(type, name) ss << " | " #name ": " << std::bitset<8>(data_point.name);
 #define X(type, name, printer) RB_PRINT_##printer(type, name)
-        RB_DATA_POINT_FEILDS
+    RB_DATA_POINT_FEILDS
 #undef X
 #undef RB_PRINT_PLAIN
 #undef RB_PRINT_INT
 #undef RB_PRINT_BITSET8
 
-        LOG_INFO << ss.str();
+    LOG_INFO << ss.str();
+}
+
+void rb_log()
+{
+    rb_data_point_t data_point;
+    while(rb_logger_queue.try_dequeue(data_point))
+    {
+        rb_write_log(data_point);
     }
 }
 
