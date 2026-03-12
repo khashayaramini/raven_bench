@@ -7,6 +7,7 @@ class RB_SPSCQueue
 {
 public:
     static_assert(CNT && !(CNT & (CNT - 1)), "CNT must be a power of 2");
+    RB_SPSCQueue(){}
 
     template<typename Writer>
     bool tryPush(Writer writer) {

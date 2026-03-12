@@ -84,10 +84,7 @@ typedef struct alignas(128) rb_data_point
 #define RB_LOGGER_QUEUE_SIZE 2048
 #endif
 
-#ifndef RB_THREAD_COUNT
-#error RB_THREAD_COUNT must be defined
-#endif
-RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[RB_THREAD_COUNT];
+extern RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[];
 
 void rb_init(std::string log_file_name);
 void rb_bench_with_dp(size_t tid, rb_data_point_t data_point);
@@ -98,8 +95,13 @@ void rb_log_block();
 
 #endif
 
-#define RB_IMPLEMENTATION
+// #define RB_IMPLEMENTATION
 #ifdef RB_IMPLEMENTATION
+
+#ifndef RB_THREAD_COUNT
+#error RB_THREAD_COUNT must be defined
+#endif
+RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[RB_THREAD_COUNT];
 
 static inline void rb_get_str_from_nanoseconds(uint64_t nanoseconds, std::string & timestamp)
 {
