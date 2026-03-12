@@ -8,7 +8,7 @@ void my_thread_1()
 {
     for(int i = 0; i < 1000; i++)
     {
-        rb_bench(.orderbook_id = 1, .seqnum = (uint32_t)i, .flags = (uint8_t)(i % 64));
+        rb_bench_c(.orderbook_id = 1, .location = 'A', .flags = (uint8_t)(i % 64));
         std::this_thread::sleep_for(std::chrono::microseconds(150));
     }
 }
@@ -17,7 +17,7 @@ void my_thread_2()
 {
     for(int i = 0; i < 1000; i++)
     {
-        rb_bench(.orderbook_id = 2, .seqnum = (uint32_t)i, .flags = (uint8_t)(i % 64));
+        rb_bench_c(.orderbook_id = 2, .location = 'B', .flags = (uint8_t)(i % 64));
         std::this_thread::sleep_for(std::chrono::microseconds(30));
     }
 }

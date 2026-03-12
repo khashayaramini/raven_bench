@@ -4,7 +4,7 @@
 //format: X(type, name, printer)
 #define RB_DATA_POINT_FEILDS \
     X(uint32_t, orderbook_id, PLAIN) \
-    X(uint32_t, seqnum, PLAIN) \
+    X(uint8_t, location, INT) \
     X(uint8_t, message_type, INT) \
     X(uint8_t, flags, BITSET8)
 
@@ -28,7 +28,8 @@
 #include <sstream>
 #include "rb_deps.h"
 
-#define rb_bench(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
+#define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
+#define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
 
 typedef struct rb_data_point
 {
@@ -44,6 +45,8 @@ void rb_init(std::string log_file_name);
 void rb_bench_with_dp(rb_data_point_t data_point);
 void rb_log();
 void rb_log_block();
+
+#endif
 
 // #define RB_IMPLEMENTATION
 #ifdef RB_IMPLEMENTATION
@@ -67,13 +70,19 @@ static inline void rb_get_str_from_nanoseconds(uint64_t nanoseconds, std::string
 static inline std::string get_date_string()
 {
     auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
+    auto tm = std::localtime(&t);
+    std::string formatString = "%y%m%d_%H:%M:%S";
 
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%d-%m-%Y_%H-%M-%S");
-    auto str = oss.str();
+    std::string buffer;
+    buffer.resize(formatString.size());
+    int len = strftime(&buffer[0], buffer.size(), formatString.c_str(), tm);
+    while (len == 0) {
+        buffer.resize(buffer.size()*2);
+        len = strftime(&buffer[0], buffer.size(), formatString.c_str(), tm);
+    }
     
-    return str;
+    buffer.erase(std::find(buffer.begin(), buffer.end(), '\0'), buffer.end());
+    return buffer;
 }
 
 moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
@@ -126,7 +135,5 @@ void rb_log_block()
         rb_log();
     }
 }
-
-#endif
 
 #endif
