@@ -2,13 +2,26 @@
 #define RAVEN_BENCH_H
 
 //format: X(type, name, printer)
+#include <algorithm>
+#include <vector>
 #define RB_DATA_POINT_FEILDS \
     X(uint32_t, orderbook_id, PLAIN) \
     X(uint8_t, location, INT) \
     X(uint8_t, message_type, INT) \
     X(uint8_t, flags, BITSET8)
 
-#define RB_INC_MDC
+// RB_THREAD_COUNT needs to be defined by the user where RB_IMPLEMENTATION is defined
+// #define RB_THREAD_COUNT 8
+//
+// RB_THREAD_ID can be defined if all the called rb_bench and rb_bench_c function comming from that include are done from the same thread
+// if RB_THREAD_ID is defined, thread id can be overwritten by using rb_bench_tid functions. if it is not defined, rb_bench_tid funcions should be used
+// 0 indexed
+// #define RB_THREAD_ID 1
+//
+// RB_LOGGER_QUEUE_SIZE can also be defined based on need, default 1024
+// RB_LOGGER_QUEUE_SIZE 128
+
+#define RB_INC_SPSC
 #define RB_INC_NANOLOG
 #include "rb_deps.h"
 
@@ -35,18 +48,31 @@
 #include <sstream>
 
 #ifdef RB_ENABLE
-#define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
-#define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
+#ifdef RB_THREAD_ID
+#define rb_bench_c(...) rb_bench_with_dp(RB_THREAD_ID, (rb_data_point_t){__VA_ARGS__});
+#define rb_bench(...) rb_bench_with_dp(RB_THREAD_ID, rb_data_point_t{0, __VA_ARGS__});
+#define rb_bench_tid_c(tid, ...) rb_bench_with_dp((tid), (rb_data_point_t){__VA_ARGS__});
+#define rb_bench_tid(tid, ...) rb_bench_with_dp((tid), rb_data_point_t{0, __VA_ARGS__});
+#else
+#define rb_bench_c(...) _Pragma("GCC error \"RB_THREAD_ID NOT DEFINED\"")
+#define rb_bench(...) _Pragma("GCC error \"RB_THREAD_ID NOT DEFINED\"")
+#define rb_bench_tid_c(tid, ...) rb_bench_with_dp((tid), (rb_data_point_t){__VA_ARGS__});
+#define rb_bench_tid(tid, ...) rb_bench_with_dp((tid), rb_data_point_t{0, __VA_ARGS__});
+#endif
+
 #define rb_bench_dir_c(...) rb_bench_with_dp_dir((rb_data_point_t){__VA_ARGS__});
-#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{__VA_ARGS__});
+#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{0, __VA_ARGS__});
 #else
 #define rb_bench_c(...)
 #define rb_bench(...)
+#define rb_bench_tid_c(...)
+#define rb_bench_tid(...)
 #define rb_bench_dir_c(...)
 #define rb_bench_dir(...)
 #endif
 
-typedef struct rb_data_point
+
+typedef struct alignas(128) rb_data_point
 {
     uint64_t timestamp;
 #define X(type, name, printer) type name;
@@ -54,10 +80,17 @@ typedef struct rb_data_point
 #undef X
 } rb_data_point_t;
 
-extern moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
+#ifndef RB_LOGGER_QUEUE_SIZE
+#define RB_LOGGER_QUEUE_SIZE 2048
+#endif
+
+#ifndef RB_THREAD_COUNT
+#error RB_THREAD_COUNT must be defined
+#endif
+RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[RB_THREAD_COUNT];
 
 void rb_init(std::string log_file_name);
-void rb_bench_with_dp(rb_data_point_t data_point);
+void rb_bench_with_dp(size_t tid, rb_data_point_t data_point);
 void rb_bench_with_dp_dir(rb_data_point_t data_point);
 void rb_write_log(rb_data_point_t data_point);
 void rb_log();
@@ -65,7 +98,7 @@ void rb_log_block();
 
 #endif
 
-// #define RB_IMPLEMENTATION
+#define RB_IMPLEMENTATION
 #ifdef RB_IMPLEMENTATION
 
 static inline void rb_get_str_from_nanoseconds(uint64_t nanoseconds, std::string & timestamp)
@@ -80,7 +113,7 @@ static inline void rb_get_str_from_nanoseconds(uint64_t nanoseconds, std::string
     ts = localtime(&c);
 
     strftime(buf, sizeof (buf), "%Y-%m-%d %H:%M:%S", ts);
-    sprintf(buf2, "%s.%d", buf, nano);
+    sprintf(buf2, "%s.%09d", buf, nano);
     timestamp = std::string(buf2);
 }
 
@@ -102,18 +135,21 @@ static inline std::string get_date_string()
     return buffer;
 }
 
-moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
-
 void rb_init(std::string log_file_name)
 {
     nanolog::GuaranteedLogger gl;
     nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
 }
 
-void rb_bench_with_dp(rb_data_point_t data_point)
+void rb_bench_with_dp(size_t tid, rb_data_point_t data_point)
 {
     data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    rb_logger_queue.enqueue(data_point);
+    rb_logger_queue_arr[tid].tryPush([data_point](rb_data_point_t *d){
+                d->timestamp = data_point.timestamp;
+#define X(type, name, printer) d->name = data_point.name;
+    RB_DATA_POINT_FEILDS
+#undef X
+            });
 }
 
 void rb_bench_with_dp_dir(rb_data_point_t data_point)
@@ -148,10 +184,11 @@ void rb_write_log(rb_data_point_t data_point)
 
 void rb_log()
 {
-    rb_data_point_t data_point;
-    while(rb_logger_queue.try_dequeue(data_point))
+    for(size_t i = 0; i < RB_THREAD_COUNT; i++)
     {
-        rb_write_log(data_point);
+        while(rb_logger_queue_arr[i].tryPop([](rb_data_point_t *d){
+            rb_write_log(*d);
+        }));
     }
 }
 
