@@ -140,8 +140,11 @@ static inline std::string get_date_string()
 
 void rb_init(std::string log_file_name)
 {
+#ifdef RB_ENABLE
+    std::cout << "WARNING RAVEN BENCH IS ENABLED!!!" << std::endl;
     rb_nanolog::GuaranteedLogger gl;
     rb_nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
+#endif
 }
 
 void rb_bench_with_dp(size_t tid, rb_data_point_t data_point)
