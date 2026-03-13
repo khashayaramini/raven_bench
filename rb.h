@@ -48,25 +48,13 @@
 #include <sstream>
 
 #ifdef RB_ENABLE
-#ifdef RB_THREAD_ID
-#define rb_bench_c(...) rb_bench_with_dp(RB_THREAD_ID, (rb_data_point_t){__VA_ARGS__});
-#define rb_bench(...) rb_bench_with_dp(RB_THREAD_ID, rb_data_point_t{0, __VA_ARGS__});
-#define rb_bench_tid_c(tid, ...) rb_bench_with_dp((tid), (rb_data_point_t){__VA_ARGS__});
-#define rb_bench_tid(tid, ...) rb_bench_with_dp((tid), rb_data_point_t{0, __VA_ARGS__});
-#else
-#define rb_bench_c(...) _Pragma("GCC error \"RB_THREAD_ID NOT DEFINED\"")
-#define rb_bench(...) _Pragma("GCC error \"RB_THREAD_ID NOT DEFINED\"")
-#define rb_bench_tid_c(tid, ...) rb_bench_with_dp((tid), (rb_data_point_t){__VA_ARGS__});
-#define rb_bench_tid(tid, ...) rb_bench_with_dp((tid), rb_data_point_t{0, __VA_ARGS__});
-#endif
-
+#define rb_bench_c(tid, ...) rb_bench_with_dp((rb_data_point_t){.threadid = (tid), __VA_ARGS__});
+#define rb_bench(tid, ...) rb_bench_with_dp(rb_data_point_t{0, (tid), __VA_ARGS__});
 #define rb_bench_dir_c(...) rb_bench_with_dp_dir((rb_data_point_t){__VA_ARGS__});
-#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{0, __VA_ARGS__});
+#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{0, 0, __VA_ARGS__});
 #else
 #define rb_bench_c(...)
 #define rb_bench(...)
-#define rb_bench_tid_c(...)
-#define rb_bench_tid(...)
 #define rb_bench_dir_c(...)
 #define rb_bench_dir(...)
 #endif
@@ -75,10 +63,10 @@
 typedef struct alignas(128) rb_data_point
 {
     uint64_t timestamp;
+    uint8_t thread_id;
 #define X(type, name, printer) type name;
     RB_DATA_POINT_FEILDS
 #undef X
-    uint8_t thread_id;
 } rb_data_point_t;
 
 #ifndef RB_LOGGER_QUEUE_SIZE
@@ -88,7 +76,7 @@ typedef struct alignas(128) rb_data_point
 extern RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[];
 
 void rb_init(std::string log_file_name);
-void rb_bench_with_dp(size_t tid, rb_data_point_t data_point);
+void rb_bench_with_dp(rb_data_point_t data_point);
 void rb_bench_with_dp_dir(rb_data_point_t data_point);
 void rb_write_log(rb_data_point_t data_point);
 void rb_log();
@@ -147,12 +135,11 @@ void rb_init(std::string log_file_name)
 #endif
 }
 
-void rb_bench_with_dp(size_t tid, rb_data_point_t data_point)
+void rb_bench_with_dp(rb_data_point_t data_point)
 {
     data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    rb_logger_queue_arr[tid].tryPush([data_point, tid](rb_data_point_t *d){
+    rb_logger_queue_arr[d->thread_id].tryPush([data_point](rb_data_point_t *d){
                 d->timestamp = data_point.timestamp;
-                d->thread_id = tid;
 #define X(type, name, printer) d->name = data_point.name;
     RB_DATA_POINT_FEILDS
 #undef X
