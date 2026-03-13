@@ -1,4 +1,14 @@
+#define RB_MODE_MPMC
+// #define RB_MODE_SPSC
+
+#ifdef RB_MODE_SPSC
+#define RB_INC_SPSC
+#elif defined(RB_MODE_MPMC)
 #define RB_INC_MDC
+#else
+#error RB_MODE must be defined
+#endif
+
 #define RB_INC_NANOLOG
 #include "rb_deps.h"
 
@@ -35,8 +45,13 @@
 #include <sstream>
 
 #ifdef RB_ENABLE
+#ifdef RB_MODE_SPSC
+#define rb_bench_c(tid, ...) rb_bench_with_dp((rb_data_point_t){.thread_id = (tid), __VA_ARGS__});
+#define rb_bench(tid, ...) rb_bench_with_dp(rb_data_point_t{0, (tid), __VA_ARGS__});
+#else
 #define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
 #define rb_bench(...) rb_bench_with_dp(rb_data_point_t{0,__VA_ARGS__});
+#endif
 #define rb_bench_dir_c(...) rb_bench_with_dp_dir((rb_data_point_t){__VA_ARGS__});
 #define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{0,__VA_ARGS__});
 #else
@@ -49,12 +64,22 @@
 typedef struct rb_data_point
 {
     uint64_t timestamp;
+#ifdef RB_MODE_SPSC
+    uint8_t thread_id;
+#endif
 #define X(type, name, printer) type name;
     RB_DATA_POINT_FEILDS
 #undef X
 } rb_data_point_t;
 
+#ifdef RB_MODE_SPSC
+#ifndef RB_LOGGER_QUEUE_SIZE
+#define RB_LOGGER_QUEUE_SIZE 2048
+#endif
+extern RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[];
+#elif defined(RB_MODE_MPMC)
 extern rb_moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
+#endif
 
 void rb_init(std::string log_file_name);
 void rb_bench_with_dp(rb_data_point_t data_point);
@@ -67,6 +92,15 @@ void rb_log_block();
 
 // #define RB_IMPLEMENTATION
 #ifdef RB_IMPLEMENTATION
+
+#ifdef RB_MODE_SPSC
+#ifndef RB_THREAD_COUNT
+#error RB_THREAD_COUNT must be defined
+#endif
+RB_SPSCQueue<rb_data_point_t, RB_LOGGER_QUEUE_SIZE> rb_logger_queue_arr[RB_THREAD_COUNT];
+#else
+rb_moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
+#endif
 
 static inline void rb_get_str_from_nanoseconds(uint64_t nanoseconds, std::string & timestamp)
 {
@@ -102,8 +136,6 @@ static inline std::string get_date_string()
     return buffer;
 }
 
-rb_moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
-
 void rb_init(std::string log_file_name)
 {
 #ifdef RB_ENABLE
@@ -115,8 +147,18 @@ void rb_init(std::string log_file_name)
 
 void rb_bench_with_dp(rb_data_point_t data_point)
 {
+#ifdef RB_MODE_SPSC
+    data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    rb_logger_queue_arr[data_point.thread_id].tryPush([data_point](rb_data_point_t *d){
+                d->timestamp = data_point.timestamp;
+#define X(type, name, printer) d->name = data_point.name;
+    RB_DATA_POINT_FEILDS
+#undef X
+            });
+#else
     data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     rb_logger_queue.enqueue(data_point);
+#endif
 }
 
 void rb_bench_with_dp_dir(rb_data_point_t data_point)
@@ -135,6 +177,9 @@ void rb_write_log(rb_data_point_t data_point)
     ss << "RB_LOG"
         << " | timestamp_str: " << timestamp_str
         << " | timestamp: " << data_point.timestamp;
+#ifdef RB_MODE_SPSC
+    ss << " | thread_id: " << (int)data_point.thread_id;
+#endif
 
 #define RB_PRINT_PLAIN(type, name) ss << " | " #name ": " << (data_point.name);
 #define RB_PRINT_INT(type, name) ss << " | " #name ": " << (int)(data_point.name);
@@ -151,11 +196,20 @@ void rb_write_log(rb_data_point_t data_point)
 
 void rb_log()
 {
+#ifdef RB_MODE_SPSC
+    for(size_t i = 0; i < RB_THREAD_COUNT; i++)
+    {
+        while(rb_logger_queue_arr[i].tryPop([](rb_data_point_t *d){
+            rb_write_log(*d);
+        }));
+    }
+#else
     rb_data_point_t data_point;
     while(rb_logger_queue.try_dequeue(data_point))
     {
         rb_write_log(data_point);
     }
+#endif
 }
 
 void rb_log_block()
