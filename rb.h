@@ -1,3 +1,7 @@
+#define RB_INC_SPSC
+#define RB_INC_NANOLOG
+#include "rb_deps.h"
+
 #ifndef RAVEN_BENCH_H
 #define RAVEN_BENCH_H
 
@@ -6,8 +10,8 @@
 #include <vector>
 #define RB_DATA_POINT_FEILDS \
     X(uint32_t, orderbook_id, PLAIN) \
+    X(char, message_type, PLAIN) \
     X(uint8_t, location, INT) \
-    X(uint8_t, message_type, INT) \
     X(uint8_t, flags, BITSET8)
 
 // RB_THREAD_COUNT needs to be defined by the user where RB_IMPLEMENTATION is defined
@@ -20,10 +24,6 @@
 //
 // RB_LOGGER_QUEUE_SIZE can also be defined based on need, default 1024
 // RB_LOGGER_QUEUE_SIZE 128
-
-#define RB_INC_SPSC
-#define RB_INC_NANOLOG
-#include "rb_deps.h"
 
 // ██████╗  █████╗ ██╗   ██╗███████╗███╗   ██╗
 // ██╔══██╗██╔══██╗██║   ██║██╔════╝████╗  ██║
@@ -139,8 +139,8 @@ static inline std::string get_date_string()
 
 void rb_init(std::string log_file_name)
 {
-    nanolog::GuaranteedLogger gl;
-    nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
+    rb_nanolog::GuaranteedLogger gl;
+    rb_nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
 }
 
 void rb_bench_with_dp(size_t tid, rb_data_point_t data_point)
