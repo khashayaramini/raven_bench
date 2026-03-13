@@ -11,7 +11,7 @@ void my_thread_0()
 {
     for(int i = 0; i < 1000; i++)
     {
-        rb_bench_c(.orderbook_id = 0, .location = 'X', .flags = (uint8_t)(i % 64));
+        rb_bench_c(0, .orderbook_id = 0, .location = 'X', .flags = (uint8_t)(i % 64));
         std::this_thread::sleep_for(std::chrono::microseconds(150));
     }
 }
@@ -20,7 +20,7 @@ void my_thread_1()
 {
     for(int i = 0; i < 1000; i++)
     {
-        rb_bench_tid_c(1, .orderbook_id = 1, .location = 'A', .flags = (uint8_t)(i % 64));
+        rb_bench_c(1, .orderbook_id = 1, .location = 'A', .flags = (uint8_t)(i % 64));
         std::this_thread::sleep_for(std::chrono::microseconds(150));
     }
 }
