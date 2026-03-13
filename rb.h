@@ -78,6 +78,7 @@ typedef struct alignas(128) rb_data_point
 #define X(type, name, printer) type name;
     RB_DATA_POINT_FEILDS
 #undef X
+    uint8_t thread_id;
 } rb_data_point_t;
 
 #ifndef RB_LOGGER_QUEUE_SIZE
@@ -146,8 +147,9 @@ void rb_init(std::string log_file_name)
 void rb_bench_with_dp(size_t tid, rb_data_point_t data_point)
 {
     data_point.timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    rb_logger_queue_arr[tid].tryPush([data_point](rb_data_point_t *d){
+    rb_logger_queue_arr[tid].tryPush([data_point, tid](rb_data_point_t *d){
                 d->timestamp = data_point.timestamp;
+                d->thread_id = tid;
 #define X(type, name, printer) d->name = data_point.name;
     RB_DATA_POINT_FEILDS
 #undef X
@@ -170,6 +172,7 @@ void rb_write_log(rb_data_point_t data_point)
     ss << "RB_LOG"
         << " | timestamp_str: " << timestamp_str
         << " | timestamp: " << data_point.timestamp;
+    ss << " | thread_id: " << (int)data_point.thread_id;
 
 #define RB_PRINT_PLAIN(type, name) ss << " | " #name ": " << (data_point.name);
 #define RB_PRINT_INT(type, name) ss << " | " #name ": " << (int)(data_point.name);
