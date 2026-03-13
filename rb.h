@@ -1,3 +1,7 @@
+#define RB_INC_MDC
+#define RB_INC_NANOLOG
+#include "rb_deps.h"
+
 #ifndef RAVEN_BENCH_H
 #define RAVEN_BENCH_H
 
@@ -7,10 +11,6 @@
     X(uint8_t, location, INT) \
     X(uint8_t, message_type, INT) \
     X(uint8_t, flags, BITSET8)
-
-#define RB_INC_MDC
-#define RB_INC_NANOLOG
-#include "rb_deps.h"
 
 // ██████╗  █████╗ ██╗   ██╗███████╗███╗   ██╗
 // ██╔══██╗██╔══██╗██║   ██║██╔════╝████╗  ██║
@@ -36,9 +36,9 @@
 
 #ifdef RB_ENABLE
 #define rb_bench_c(...) rb_bench_with_dp((rb_data_point_t){__VA_ARGS__});
-#define rb_bench(...) rb_bench_with_dp(rb_data_point_t{__VA_ARGS__});
+#define rb_bench(...) rb_bench_with_dp(rb_data_point_t{0,__VA_ARGS__});
 #define rb_bench_dir_c(...) rb_bench_with_dp_dir((rb_data_point_t){__VA_ARGS__});
-#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{__VA_ARGS__});
+#define rb_bench_dir(...) rb_bench_with_dp_dir(rb_data_point_t{0,__VA_ARGS__});
 #else
 #define rb_bench_c(...)
 #define rb_bench(...)
@@ -54,7 +54,7 @@ typedef struct rb_data_point
 #undef X
 } rb_data_point_t;
 
-extern moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
+extern rb_moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
 
 void rb_init(std::string log_file_name);
 void rb_bench_with_dp(rb_data_point_t data_point);
@@ -102,12 +102,15 @@ static inline std::string get_date_string()
     return buffer;
 }
 
-moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
+rb_moodycamel::ConcurrentQueue<rb_data_point_t> rb_logger_queue;
 
 void rb_init(std::string log_file_name)
 {
-    nanolog::GuaranteedLogger gl;
-    nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
+#ifdef RB_ENABLE
+    std::cout << "WARNING RAVEN BENCH IS ENABLED!!!" << std::endl;
+    rb_nanolog::GuaranteedLogger gl;
+    rb_nanolog::initialize(gl, "./rb_logs/", "rb_" + log_file_name + get_date_string(), 10);
+#endif
 }
 
 void rb_bench_with_dp(rb_data_point_t data_point)
